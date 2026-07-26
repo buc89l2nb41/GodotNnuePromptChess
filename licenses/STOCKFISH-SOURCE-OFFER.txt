@@ -1,0 +1,19 @@
+Stockfish (GPLv3) — Source offer / 안내
+
+This project bundles the Stockfish engine binary.
+Stockfish is licensed under the GNU GPL v3.
+
+To comply with GPLv3, you must provide access to the corresponding Stockfish source code.
+
+Recommended approach:
+- Provide a copy of the Stockfish source code alongside your distribution, OR
+- Provide a written offer / clear instructions to obtain the source.
+
+Official source code:
+- GitHub: https://github.com/official-stockfish/Stockfish
+- Stockfish 18 source zip: https://github.com/official-stockfish/Stockfish/archive/refs/tags/sf_18.zip
+
+If you redistribute this project, ensure you also include:
+- `licenses/STOCKFISH-LICENSE.txt`
+- This file (or an equivalent source offer / 안내)
+

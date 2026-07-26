@@ -1,0 +1,485 @@
+[gd_scene load_steps=7 format=3 uid="uid://chess_main_scene"]
+
+[ext_resource type="Script" path="res://main.gd" id="1_main"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_reset_normal"]
+bg_color = Color(0.505882, 0.713725, 0.298039, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+content_margin_left = 18.0
+content_margin_top = 9.0
+content_margin_right = 18.0
+content_margin_bottom = 9.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_reset_hover"]
+bg_color = Color(0.572549, 0.780392, 0.321569, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+content_margin_left = 18.0
+content_margin_top = 9.0
+content_margin_right = 18.0
+content_margin_bottom = 9.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_reset_pressed"]
+bg_color = Color(0.431373, 0.619608, 0.243137, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+content_margin_left = 18.0
+content_margin_top = 9.0
+content_margin_right = 18.0
+content_margin_bottom = 9.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_popup_panel"]
+bg_color = Color(0.172549, 0.172549, 0.172549, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.254902, 0.254902, 0.254902, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+content_margin_left = 16.0
+content_margin_top = 16.0
+content_margin_right = 16.0
+content_margin_bottom = 16.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_promo_btn"]
+bg_color = Color(0.227451, 0.227451, 0.227451, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.333333, 0.333333, 0.333333, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+content_margin_left = 8.0
+content_margin_top = 6.0
+content_margin_right = 8.0
+content_margin_bottom = 6.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_chat_panel"]
+bg_color = Color(0.149020, 0.141176, 0.129412, 1)
+border_width_left = 1
+border_color = Color(0, 0, 0, 0.24)
+content_margin_left = 0.0
+content_margin_top = 0.0
+content_margin_right = 0.0
+content_margin_bottom = 0.0
+
+[node name="Main" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_main")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Bar" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 58)
+mouse_filter = 2
+theme_override_constants/separation = 12
+
+[node name="TurnLabel" type="Label" parent="VBox/Bar"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.921569, 0.921569, 0.921569, 1)
+theme_override_font_sizes/font_size = 16
+text = "백 차례"
+
+[node name="ResetButton" type="Button" parent="VBox/Bar"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.95, 0.95, 0.95, 1)
+theme_override_font_sizes/font_size = 14
+theme_override_styles/normal = SubResource("StyleBoxFlat_reset_normal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_reset_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_reset_pressed")
+text = "새 게임"
+
+[node name="UndoButton" type="Button" parent="VBox/Bar"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.95, 0.95, 0.95, 1)
+theme_override_font_sizes/font_size = 14
+theme_override_styles/normal = SubResource("StyleBoxFlat_reset_normal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_reset_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_reset_pressed")
+text = "무르기"
+
+[node name="EditButton" type="Button" parent="VBox/Bar"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.95, 0.95, 0.95, 1)
+theme_override_font_sizes/font_size = 14
+theme_override_styles/normal = SubResource("StyleBoxFlat_reset_normal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_reset_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_reset_pressed")
+text = "편집"
+
+[node name="EngineButton" type="Button" parent="VBox/Bar"]
+visible = false
+
+[node name="CpuButton" type="Button" parent="VBox/Bar"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.95, 0.95, 0.95, 1)
+theme_override_font_sizes/font_size = 14
+theme_override_styles/normal = SubResource("StyleBoxFlat_reset_normal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_reset_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_reset_pressed")
+text = "상대: OFF"
+
+[node name="SettingsButton" type="Button" parent="VBox/Bar"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.95, 0.95, 0.95, 1)
+theme_override_font_sizes/font_size = 14
+theme_override_styles/normal = SubResource("StyleBoxFlat_reset_normal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_reset_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_reset_pressed")
+text = "설정"
+
+[node name="PlayerSide" type="OptionButton" parent="VBox/Bar"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+item_count = 2
+selected = 0
+popup/item_0/text = "플레이어=백"
+popup/item_1/text = "플레이어=흑"
+
+[node name="EngineStatus" type="Label" parent="VBox/Bar"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.78, 0.78, 0.78, 1)
+theme_override_font_sizes/font_size = 13
+text = "ENGINE: -"
+
+[node name="SettingsPopup" type="PopupPanel" parent="."]
+theme_override_styles/panel = SubResource("StyleBoxFlat_popup_panel")
+
+[node name="Margin" type="MarginContainer" parent="SettingsPopup"]
+layout_mode = 2
+theme_override_constants/margin_left = 4
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 4
+theme_override_constants/margin_bottom = 4
+
+[node name="VBox" type="VBoxContainer" parent="SettingsPopup/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="SettingsPopup/Margin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.93, 0.93, 0.93, 1)
+theme_override_font_sizes/font_size = 14
+text = "설정"
+
+[node name="Row" type="HBoxContainer" parent="SettingsPopup/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="LevelLabel" type="Label" parent="SettingsPopup/Margin/VBox/Row"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.86, 0.86, 0.86, 1)
+theme_override_font_sizes/font_size = 13
+text = "난이도"
+
+[node name="SkillLabel" type="Label" parent="SettingsPopup/Margin/VBox/Row"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.86, 0.86, 0.86, 1)
+theme_override_font_sizes/font_size = 13
+text = "Skill"
+
+[node name="Skill" type="SpinBox" parent="SettingsPopup/Margin/VBox/Row"]
+layout_mode = 2
+min_value = 0.0
+max_value = 20.0
+step = 1.0
+value = 10.0
+rounded = true
+allow_greater = false
+allow_lesser = false
+suffix = ""
+
+[node name="TimeLabel" type="Label" parent="SettingsPopup/Margin/VBox/Row"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.86, 0.86, 0.86, 1)
+theme_override_font_sizes/font_size = 13
+text = "ms"
+
+[node name="MoveTime" type="SpinBox" parent="SettingsPopup/Margin/VBox/Row"]
+layout_mode = 2
+min_value = 10.0
+max_value = 5000.0
+step = 10.0
+value = 200.0
+rounded = true
+allow_greater = false
+allow_lesser = false
+
+[node name="DepthLabel" type="Label" parent="SettingsPopup/Margin/VBox/Row"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.86, 0.86, 0.86, 1)
+theme_override_font_sizes/font_size = 13
+text = "Depth"
+
+[node name="MaxDepth" type="SpinBox" parent="SettingsPopup/Margin/VBox/Row"]
+layout_mode = 2
+min_value = 0.0
+max_value = 40.0
+step = 1.0
+value = 3.0
+rounded = true
+allow_greater = false
+allow_lesser = false
+
+[node name="Level" type="OptionButton" parent="SettingsPopup/Margin/VBox/Row"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+item_count = 8
+selected = 3
+popup/item_0/text = "레벨 1"
+popup/item_1/text = "레벨 2"
+popup/item_2/text = "레벨 3"
+popup/item_3/text = "레벨 4"
+popup/item_4/text = "레벨 5"
+popup/item_5/text = "레벨 6"
+popup/item_6/text = "레벨 7"
+popup/item_7/text = "레벨 8"
+
+[node name="Hint" type="RichTextLabel" parent="SettingsPopup/Margin/VBox"]
+layout_mode = 2
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+text = "[color=#BDBDBD]Skill/movetime/depth를 직접 설정하거나, 레벨(1~8)로 자동 매핑할 수 있습니다.[/color]\n[color=#BDBDBD]MaxDepth=0이면 depth 제한 없이 movetime만 사용합니다.[/color]"
+
+[node name="EngineLogToggle" type="CheckBox" parent="SettingsPopup/Margin/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "엔진 로그 표시(개발용)"
+
+[node name="EngineLogView" type="TextEdit" parent="SettingsPopup/Margin/VBox"]
+visible = false
+layout_mode = 2
+custom_minimum_size = Vector2(560, 180)
+editable = false
+context_menu_enabled = false
+caret_blink = false
+wrap_mode = 1
+
+[node name="Close" type="Button" parent="SettingsPopup/Margin/VBox"]
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_reset_normal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_reset_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_reset_pressed")
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 14
+text = "닫기"
+
+[node name="PromotionPopup" type="PopupPanel" parent="."]
+theme_override_styles/panel = SubResource("StyleBoxFlat_popup_panel")
+
+
+[node name="Margin" type="MarginContainer" parent="PromotionPopup"]
+layout_mode = 2
+theme_override_constants/margin_left = 4
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 4
+theme_override_constants/margin_bottom = 4
+
+[node name="VBox" type="VBoxContainer" parent="PromotionPopup/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="PromotionPopup/Margin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.93, 0.93, 0.93, 1)
+theme_override_font_sizes/font_size = 14
+text = "승급"
+
+[node name="Grid" type="GridContainer" parent="PromotionPopup/Margin/VBox"]
+layout_mode = 2
+columns = 4
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+
+[node name="Q" type="Button" parent="PromotionPopup/Margin/VBox/Grid"]
+layout_mode = 2
+custom_minimum_size = Vector2(58, 42)
+theme_override_colors/font_color = Color(0.95, 0.95, 0.95, 1)
+theme_override_font_sizes/font_size = 14
+theme_override_styles/normal = SubResource("StyleBoxFlat_promo_btn")
+theme_override_styles/hover = SubResource("StyleBoxFlat_promo_btn")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_promo_btn")
+text = "퀸"
+
+[node name="R" type="Button" parent="PromotionPopup/Margin/VBox/Grid"]
+layout_mode = 2
+custom_minimum_size = Vector2(58, 42)
+theme_override_colors/font_color = Color(0.95, 0.95, 0.95, 1)
+theme_override_font_sizes/font_size = 14
+theme_override_styles/normal = SubResource("StyleBoxFlat_promo_btn")
+theme_override_styles/hover = SubResource("StyleBoxFlat_promo_btn")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_promo_btn")
+text = "룩"
+
+[node name="B" type="Button" parent="PromotionPopup/Margin/VBox/Grid"]
+layout_mode = 2
+custom_minimum_size = Vector2(58, 42)
+theme_override_colors/font_color = Color(0.95, 0.95, 0.95, 1)
+theme_override_font_sizes/font_size = 14
+theme_override_styles/normal = SubResource("StyleBoxFlat_promo_btn")
+theme_override_styles/hover = SubResource("StyleBoxFlat_promo_btn")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_promo_btn")
+text = "비숍"
+
+[node name="N" type="Button" parent="PromotionPopup/Margin/VBox/Grid"]
+layout_mode = 2
+custom_minimum_size = Vector2(58, 42)
+theme_override_colors/font_color = Color(0.95, 0.95, 0.95, 1)
+theme_override_font_sizes/font_size = 14
+theme_override_styles/normal = SubResource("StyleBoxFlat_promo_btn")
+theme_override_styles/hover = SubResource("StyleBoxFlat_promo_btn")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_promo_btn")
+text = "나이트"
+
+[node name="ChatPanel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -300.0
+offset_top = 58.0
+grow_horizontal = 0
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_chat_panel")
+
+[node name="Margin" type="MarginContainer" parent="ChatPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="VBox" type="VBoxContainer" parent="ChatPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PositionLabel" type="Label" parent="ChatPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.78, 0.8, 0.82, 1)
+theme_override_font_sizes/font_size = 12
+text = "FEN / PGN"
+
+[node name="PositionPaste" type="TextEdit" parent="ChatPanel/Margin/VBox"]
+custom_minimum_size = Vector2(0, 64)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+placeholder_text = "FEN/PGN 붙여넣기 → 보드에 적용 또는 코칭"
+wrap_mode = 1
+
+[node name="PositionRow" type="HBoxContainer" parent="ChatPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="PositionApply" type="Button" parent="ChatPanel/Margin/VBox/PositionRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 12
+theme_override_styles/normal = SubResource("StyleBoxFlat_reset_normal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_reset_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_reset_pressed")
+text = "보드에 적용"
+
+[node name="PositionCoach" type="Button" parent="ChatPanel/Margin/VBox/PositionRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 12
+theme_override_styles/normal = SubResource("StyleBoxFlat_reset_normal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_reset_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_reset_pressed")
+text = "코칭"
+
+[node name="PositionCopyFen" type="Button" parent="ChatPanel/Margin/VBox/PositionRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 12
+theme_override_styles/normal = SubResource("StyleBoxFlat_reset_normal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_reset_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_reset_pressed")
+text = "현재 FEN"
+
+[node name="PositionStatus" type="Label" parent="ChatPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.68, 0.7, 1)
+theme_override_font_sizes/font_size = 11
+autowrap_mode = 3
+text = ""
+
+[node name="ChatLog" type="RichTextLabel" parent="ChatPanel/Margin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+scroll_following = true
+fit_content = false
+theme_override_font_sizes/normal_font_size = 13
+theme_override_colors/default_color = Color(0.9, 0.9, 0.9, 1)
+
+[node name="ChatInput" type="TextEdit" parent="ChatPanel/Margin/VBox"]
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+placeholder_text = "대화 · 오프닝/전술 · Ctrl+Enter"
+wrap_mode = 1
+scroll_fit_content_height = false
+
+[node name="Row" type="HBoxContainer" parent="ChatPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ChatSend" type="Button" parent="ChatPanel/Margin/VBox/Row"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 13
+theme_override_styles/normal = SubResource("StyleBoxFlat_reset_normal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_reset_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_reset_pressed")
+text = "전송"
+
+[node name="AiHttp" type="HTTPRequest" parent="."]
+timeout = 90.0
+
+[node name="AiHealthHttp" type="HTTPRequest" parent="."]
+timeout = 3.0

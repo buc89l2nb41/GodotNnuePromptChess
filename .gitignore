@@ -1,0 +1,35 @@
+# Godot / editor
+.godot/
+*.translation
+export_presets.cfg
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.tmp
+*~
+
+# Secrets & local env
+.env
+**/.env
+ai_sidecar/.env
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.venv/
+**/venv/
+**/.pytest_cache/
+ai_sidecar/sidecar.log
+
+# Stockfish binaries & extracted trees (download locally)
+engine/stockfish/**/*.exe
+engine/stockfish/**/*.dll
+engine/stockfish/stockfish
+engine/stockfish/stockfish-*
+engine/stockfish/_extract/
+
+# Screenshots / local debug dumps
+agent_debug/**/out/
+agent_debug/**/*.png
+*.log
