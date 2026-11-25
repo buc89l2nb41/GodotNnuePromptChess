@@ -1,0 +1,10 @@
+candidates (stockfish): ['e2e4', 'd2d4', 'g1f3', 'e2e3', 'c2c3']
+[GATE] REPLACED proposed=e1e8 applied=g1f3 candidates=e2e4,d2d4,g1f3,e2e3,c2c3 fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 note=inject
+PASS illegal move: proposed=e1e8 -> applied=g1f3 gate=replaced reason=inject 제안 'e1e8'는 후보 밖 → 난이도 가중 후보 g1f3로 교체
+[GATE] REPLACED proposed=g2g4 applied=e2e4 candidates=e2e4,d2d4,g1f3,e2e3,c2c3 fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 note=inject
+PASS legal but off-candidate: proposed=g2g4 -> applied=e2e4 gate=replaced reason=inject 제안 'g2g4'는 후보 밖 → 난이도 가중 후보 e2e4로 교체
+[GATE] REPLACED proposed=knight to f3 applied=e2e4 candidates=e2e4,d2d4,g1f3,e2e3,c2c3 fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 note=inject
+PASS unparseable answer: proposed=knight to f3 -> applied=e2e4 gate=replaced reason=inject 제안 'knight to f3'는 후보 밖 → 난이도 가중 후보 e2e4로 교체
+[GATE] PASS     proposed=e2e4 applied=e2e4 candidates=e2e4,d2d4,g1f3,e2e3,c2c3 fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 note=inject
+PASS candidate passes: proposed=e2e4 -> applied=e2e4 gate=pass reason=
+gate test: 4/4 passed

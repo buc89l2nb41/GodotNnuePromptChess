@@ -8,6 +8,7 @@ const UciEngineController := preload("res://scripts/engine/uci_engine_controller
 const UciMultipv := preload("res://scripts/engine/uci_multipv.gd")
 const AiSidecarClient := preload("res://scripts/ai/ai_sidecar_client.gd")
 const AiSidecarProcess := preload("res://scripts/ai/ai_sidecar_process.gd")
+const MoveGate := preload("res://scripts/ai/move_gate.gd")
 
 ## chess.com 기본 그린 보드 + 플레이 화면(다크 크롬·브랜드 그린)에 맞춘 팔레트
 const LIGHT := Color(0.933333, 0.933333, 0.823529) # #EEEED2
@@ -129,7 +130,7 @@ var _ai_health_tries: int = 0
 var _ai_sidecar_bootstrapped: bool = false
 const _AI_HEALTH_MAX_TRIES := 20
 ## Must match ai_sidecar/server.py CODE_REV
-const _AI_SIDECAR_CODE_REV := 10
+const _AI_SIDECAR_CODE_REV := 11
 
 enum TurnMode { HUMAN_TURN, ENGINE_THINKING, ENGINE_MOVE_APPLYING, GAME_OVER }
 var _turn_mode: int = TurnMode.HUMAN_TURN
@@ -1159,69 +1160,33 @@ func _on_engine_candidates(candidates: Array, bestmove: String) -> void:
 
 
 func _pick_skill_weighted_candidate(candidates: Array, skill_level: int) -> String:
-	if candidates.is_empty():
-		return ""
-	var items: Array = candidates.duplicate()
-	items.sort_custom(func(a, b) -> bool:
-		return int(a.get("rank", 99)) < int(b.get("rank", 99))
-	)
-	if items.size() == 1:
-		return String(items[0].get("uci", ""))
-	var skill := clampi(skill_level, 0, 20)
-	var exponent := 0.35 + (float(skill) / 20.0) * 3.15
-	var weights: Array[float] = []
-	var total := 0.0
-	for it in items:
-		var r := maxi(1, int(it.get("rank", 1)))
-		var w := 1.0 / pow(float(r), exponent)
-		weights.append(w)
-		total += w
-	var roll := randf() * total
-	var acc := 0.0
-	for i in items.size():
-		acc += weights[i]
-		if roll <= acc:
-			return String(items[i].get("uci", ""))
-	return String(items[0].get("uci", ""))
-
-
-func _try_apply_ai_uci(uci: String) -> bool:
-	if uci.is_empty() or _state == null:
-		return false
-	var parsed := UciMoves.parse_uci_move(uci)
-	if not bool(parsed.get("ok", false)):
-		return false
-	var probe := ChessState.new(_state)
-	var promo_piece := ChessState.W_QUEEN
-	var promo := String(parsed.get("promo", ""))
-	if not promo.is_empty():
-		var w := probe.white_to_move
-		match promo:
-			"q":
-				promo_piece = ChessState.W_QUEEN if w else ChessState.B_QUEEN
-			"r":
-				promo_piece = ChessState.W_ROOK if w else ChessState.B_ROOK
-			"b":
-				promo_piece = ChessState.W_BISHOP if w else ChessState.B_BISHOP
-			"n":
-				promo_piece = ChessState.W_KNIGHT if w else ChessState.B_KNIGHT
-	return probe.make_move(parsed.from, parsed.to, promo_piece)
+	return MoveGate.pick_skill_weighted(candidates, skill_level)
 
 
 func _on_ai_move_chosen(uci: String, reason: String, _reply: String, fallback: bool) -> void:
 	if not _awaiting_ai_pick:
 		return
 	_awaiting_ai_pick = false
-	var pick := uci
-	# Opening book may return a move outside MultiPV — try it first.
-	if not _try_apply_ai_uci(pick):
-		pick = _pick_skill_weighted_candidate(_ai_pending_candidates, _skill_level)
-		if pick.is_empty():
-			pick = _ai_pending_bestmove
+	# Gate 1 (sidecar): LLM pick must be one of the MultiPV candidates.
+	var llm_uci := _ai.last_llm_uci if _ai != null else ""
+	var side_gate := _ai.last_gate if _ai != null else ""
+	if side_gate == "replaced":
+		var side_log := "[GATE] SIDECAR  REPLACED proposed=%s applied=%s (후보 밖)" % [
+			llm_uci if not llm_uci.is_empty() else "(none)", uci]
+		print(side_log)
+		_chat_append_system("게이트: AI 제안 %s는 엔진 후보가 아니라 %s로 교체" % [
+			llm_uci if not llm_uci.is_empty() else "(파싱 실패)", uci])
+	# Gate 2 (Godot): rules check via ChessState.make_move on a copy.
+	# Opening-book moves may come from outside MultiPV, so this runs for every pick.
+	var d := MoveGate.decide(_state, uci, _ai_pending_candidates, _ai_pending_bestmove, _skill_level)
+	print(String(d.log))
+	var pick := String(d.uci)
+	if bool(d.replaced):
 		fallback = true
-		_chat_append_system("요청 수가 불가라 난이도 가중 후보로 대체: %s" % pick)
-	# Moves stay silent in chat — explanations only when the user asks via Send.
-	if fallback and reason.find("북") < 0 and not pick.is_empty():
+		_chat_append_system("게이트: 수 %s는 규칙상 불가라 엔진 후보 %s로 교체" % [
+			uci if not uci.is_empty() else "(없음)", pick])
+	elif fallback and side_gate != "replaced" and reason.find("북") < 0 and not pick.is_empty():
+		# Moves stay silent in chat — explanations only when the user asks via Send.
 		_chat_append_system("폴백 적용: %s" % pick)
 	_apply_cpu_move_uci(pick)
 	_update_engine_status()

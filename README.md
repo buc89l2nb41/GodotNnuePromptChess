@@ -1,8 +1,77 @@
 # Godot NNUE × Prompt Chess
 
-**Prompt로 오프닝·스타일을 지시하고 대국하는 Godot 체스** — 수는 **Stockfish NNUE**가 검증·후보 생성하고, **Cursor AI**가 프롬프트에 맞게 고르거나 코칭합니다.
+**무엇:** 채팅(프롬프트)으로 오프닝·스타일을 지시하면 LLM이 상대 수를 고르는 Godot 4 체스입니다.  
+**왜:** LLM이 고른 수를 그대로 믿지 않고, Stockfish MultiPV 후보에 있고 규칙상 가능한 수만 보드에 올리는 "게이트" 구조를 실제 게임 안에서 검증하려고 만들었습니다.  
+**확인:** 아래 [게이트 동작 증거](#게이트-동작-증거) 스크린샷·로그를 보거나, `python ai_sidecar/test_gate.py`(API 키 없이 실행 가능)를 실행하면 됩니다.
 
 Repo: [buc89l2nb41/GodotNnuePromptChess](https://github.com/buc89l2nb41/GodotNnuePromptChess)
+
+---
+
+## 게이트 흐름
+
+```mermaid
+flowchart LR
+    P["플레이어 수 / 채팅 프롬프트"] --> SF["Stockfish NNUE<br/>MultiPV 후보 (최대 8개)"]
+    SF --> LLM["LLM (Cursor SDK)<br/>후보 중 하나를 골라 JSON 응답"]
+    LLM --> G1{"게이트 1 · 사이드카<br/>후보 목록 안에 있는가?<br/>(_clamp_move)"}
+    G1 -- 예 --> G2{"게이트 2 · Godot<br/>규칙상 가능한가?<br/>(ChessState.make_move)"}
+    G1 -- "아니오 / 파싱 실패" --> R1["난이도 가중으로<br/>엔진 후보 하나로 교체"]
+    R1 --> G2
+    BOOK["오프닝 북 수"] --> G2
+    G2 -- 예 --> B["보드에 적용"]
+    G2 -- 아니오 --> R2["엔진 후보로 교체"]
+    R2 --> B
+```
+
+- 게이트 1: [`ai_sidecar/server.py`](ai_sidecar/server.py)의 `_clamp_move`. LLM 응답의 UCI가 MultiPV 후보에 없으면(불법 수, 후보 밖 합법 수, 문장으로 답한 경우 모두) 후보 중 하나로 바꿉니다.
+- 게이트 2: [`scripts/ai/move_gate.gd`](scripts/ai/move_gate.gd)의 `MoveGate.decide`. 보드 사본에 `ChessState.make_move`를 시도해 실패하면 엔진 후보로 바꿉니다. 오프닝 북 수는 MultiPV 밖일 수 있어서 이 단계만 거칩니다.
+- 판정마다 `[GATE]` 로그가 한 줄씩 남습니다(사이드카는 `ai_sidecar/sidecar.log`, Godot은 콘솔). 채팅 패널에도 `게이트: AI 제안 ○○는 엔진 후보가 아니라 ○○로 교체`가 표시됩니다.
+
+---
+
+## 게이트 동작 증거
+
+실제 게임 창, 실제 Stockfish 18, 실제 사이드카로 찍은 화면입니다. 백 `e2e4` 뒤 흑 AI의 답으로 `e8e1`(킹이 판을 가로지르는 불법 수)을 넣었고, 게이트가 MultiPV 후보 `e7e6`으로 바꿔 보드에 올렸습니다. 이때 LLM 답은 테스트용 주입(`AI_SIDECAR_INJECT_UCI`)으로 대신했으며, 그 뒤의 검사 경로는 실제 LLM 응답과 같은 함수를 씁니다.
+
+![게이트가 불법 수 e8e1을 엔진 후보 e7e6으로 교체한 게임 화면](docs/images/gate_demo_ingame.png)
+
+같은 실행의 로그([`docs/logs/gate_demo_ingame.txt`](docs/logs/gate_demo_ingame.txt)):
+
+```text
+[GATE] REPLACED proposed=e8e1 applied=e7e6 candidates=e7e5,e7e6,c7c5,c7c6,b8c6,d7d6,g7g6,a7a6 fen=rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1 note=inject
+[GATE] SIDECAR  REPLACED proposed=e8e1 applied=e7e6 (후보 밖)
+[GATE] GODOT    PASS     proposed=e7e6 applied=e7e6 candidates=e7e5,e7e6,c7c5,c7c6,b8c6,d7d6,g7g6,a7a6 fen=rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1
+```
+
+테스트 결과(모두 실제 Stockfish MultiPV 후보 사용):
+
+| 테스트 | 확인 내용 | 결과 |
+|--------|-----------|------|
+| [`ai_sidecar/test_gate.py`](ai_sidecar/test_gate.py) | 불법 수 `e1e8`, 후보 밖 합법 수 `g2g4`, 문장 답 `knight to f3` → 교체 / 후보 수 → 통과 | 4/4 통과 ([로그](docs/logs/gate_test_python.txt)) |
+| [`agent_debug/scripts/run_gate_test.gd`](agent_debug/scripts/run_gate_test.gd) | Godot 규칙 게이트: 불법·파싱 불가 수 → 후보로 교체, 후보 수 → 통과, 보드 불변 (2개 포지션) | 12/12 통과 ([로그](docs/logs/gate_test_godot.txt)) |
+
+### 직접 재현하기
+
+API 키 없이 됩니다. Stockfish 배치(Quick Start 3단계)와 사이드카 패키지 설치(4단계의 `pip install`)만 필요합니다.
+
+```powershell
+# 1) 사이드카 게이트만 (Python)
+cd ai_sidecar
+python test_gate.py
+```
+
+```powershell
+# 2) 실제 게임 창에서 교체 장면 캡처 (PNG + 콘솔 로그)
+Godot_v4.6.2-stable_win64_console.exe --path . -s res://agent_debug/scripts/capture_gate_demo.gd -- --inject=e8e1
+```
+
+손으로 녹화하려면 PowerShell에서 `$env:AI_SIDECAR_INJECT_UCI = "e8e1"`을 설정한 뒤 같은 창에서 Godot을 실행하고, **상대: AI**, 플레이어=백으로 `e2e4`를 두면 됩니다. 흑이 둘 때마다 채팅 패널에 교체 메시지가 나옵니다. 실제 대국에서는 이 변수를 지워야 합니다.
+
+### 한계
+
+- 위 증거의 "LLM 오답"은 주입한 값입니다. 실제 LLM이 스스로 후보 밖 수를 낸 장면은 아직 따로 기록하지 않았습니다.
+- LLM이 "오프닝 북 수"라고 답한 경우는 후보 목록 검사 없이 규칙 검사(게이트 2)만 거치므로, 합법이지만 약한 수가 올라갈 수 있습니다.
 
 ---
 
@@ -93,7 +162,7 @@ Godot_v4.x_win64_console.exe --path "C:\path\to\GodotNnuePromptChess"
 | 모드 | 누가 두나 | 특징 |
 |------|-----------|------|
 | **CPU** | Stockfish (NNUE) | Skill / movetime / depth로 난이도 |
-| **AI (Prompt)** | Cursor AI가 MultiPV 후보 중 선택 | 채팅으로 오프닝·스타일·질문; 불법 수는 엔진 폴백으로 차단 |
+| **AI (Prompt)** | Cursor AI가 MultiPV 후보 중 선택 | 채팅으로 오프닝·스타일·질문; 후보 밖·불법 수는 게이트에서 엔진 후보로 교체 |
 | **코칭** | Cursor AI 해설 | PGN/FEN 붙여넣기 후 **코칭** — 보드는 최종 포지션으로 맞춤 |
 
 핵심 원칙: **LLM이 임의로 둔 수는 보드에 바로 올리지 않습니다.**  
@@ -167,14 +236,16 @@ GodotNnuePromptChess/
 │   ├── chess_state.gd      # 규칙 · FEN
 │   ├── pgn_fen.gd          # FEN/PGN 로더
 │   ├── engine/             # Stockfish UCI
-│   └── ai/                 # 사이드카 HTTP · 프로세스
+│   └── ai/                 # 사이드카 HTTP · 프로세스 · move_gate.gd(규칙 게이트)
 ├── ai_sidecar/
 │   ├── server.py           # FastAPI + Cursor SDK
 │   ├── openings.py         # 북/Skill 헬퍼
+│   ├── test_gate.py        # 후보 게이트 테스트 (키 불필요)
 │   ├── .env.example
 │   └── requirements.txt
 ├── engine/stockfish/       # stockfish.exe (직접 배치, 미포함 권장)
-└── agent_debug/            # 헤드리스·스모크 테스트
+├── docs/                   # 게이트 증거 스크린샷 · 로그
+└── agent_debug/            # 헤드리스·스모크 테스트 · 게이트 캡처
 ```
 
 ---
@@ -215,7 +286,12 @@ Godot console 경로를 `GODOT`에 두고:
 
 # Stockfish 스모크
 %GODOT% --headless --path "." -s "res://agent_debug/scripts/run_stockfish_bestmove_smoke_test.gd"
+
+# 게이트 (Godot 규칙 게이트)
+%GODOT% --headless --path "." -s "res://agent_debug/scripts/run_gate_test.gd"
 ```
+
+사이드카 게이트: `cd ai_sidecar` 후 `python test_gate.py`
 
 ---
 

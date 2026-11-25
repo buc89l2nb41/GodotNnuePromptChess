@@ -2,7 +2,10 @@
 Local HTTP sidecar: Godot <-> Cursor SDK for hybrid chess AI.
 
 Auth: CURSOR_API_KEY env var or ai_sidecar/.env (never commit keys).
-Mock: AI_SIDECAR_MOCK=1 skips Cursor and picks candidates[0].
+Mock: AI_SIDECAR_MOCK=1 skips Cursor and picks a skill-weighted candidate.
+Gate demo: AI_SIDECAR_INJECT_UCI=e1e8 replaces the LLM's answer with that UCI
+(test-only injection) so the candidate gate can be seen without an API key.
+Every /move decision prints a "[GATE]" line to stdout (sidecar.log).
 
 Run:
   copy .env.example .env   # then edit CURSOR_API_KEY
@@ -51,7 +54,7 @@ app.add_middleware(
 MOCK = os.environ.get("AI_SIDECAR_MOCK", "").strip() in ("1", "true", "TRUE", "yes")
 MODEL = os.environ.get("CURSOR_AI_MODEL", "composer-2.5").strip() or "composer-2.5"
 # Bump when move/opening logic changes so Godot can restart stale servers.
-CODE_REV = 10
+CODE_REV = 11
 WORKDIR = os.environ.get(
     "AI_SIDECAR_WORKDIR",
     os.path.join(tempfile.gettempdir(), "chess_cursor_ai_sidecar"),
@@ -117,6 +120,10 @@ class MoveResponse(BaseModel):
     reply: str
     fallback: bool = False
     agent_id: str = ""
+    # What the model (or test injection) proposed, before the candidate gate.
+    llm_uci: str = ""
+    # pass | replaced | book | mock | error
+    gate: str = ""
 
 
 class ChatRequest(BaseModel):
@@ -257,21 +264,40 @@ def _pick_fallback(
     )
 
 
+def _gate_log(gate: str, proposed: str, applied: str, allowed: list[str], fen: str, note: str = "") -> None:
+    """One greppable line per move decision (Godot redirects stdout to sidecar.log)."""
+    line = (
+        f"[GATE] {gate.upper():8s} proposed={proposed or '(none)'} applied={applied or '(none)'} "
+        f"candidates={','.join(allowed)} fen={fen}"
+    )
+    if note:
+        line += f" note={note}"
+    print(line, flush=True)
+
+
 def _clamp_move(
     uci: str,
     candidates: list[Candidate],
     reason: str,
     reply: str,
     skill_level: int = 10,
+    fen: str = "",
+    source: str = "llm",
 ) -> MoveResponse:
-    allowed = set(_candidate_ucis(candidates))
-    u = (uci or "").strip()
+    allowed_list = _candidate_ucis(candidates)
+    allowed = set(allowed_list)
+    u = (uci or "").strip().lower()
     if u in allowed:
-        return MoveResponse(uci=u, reason=reason or "", reply=reply or "", fallback=False)
-    fb = _pick_fallback(
-        candidates, "후보 밖/파싱 실패 → 난이도 가중 후보 선택", skill_level
-    )
+        _gate_log("pass", u, u, allowed_list, fen, source)
+        return MoveResponse(
+            uci=u, reason=reason or "", reply=reply or "", fallback=False, llm_uci=u, gate="pass"
+        )
+    fb = _pick_fallback(candidates, "", skill_level)
+    fb.reason = f"{source} 제안 '{u or '(파싱 실패)'}'는 후보 밖 → 난이도 가중 후보 {fb.uci}로 교체"
     fb.reason = (reason + " | " if reason else "") + fb.reason
+    fb.llm_uci = u
+    fb.gate = "replaced"
+    _gate_log("replaced", u, fb.uci, allowed_list, fen, source)
     if reply:
         fb.reply = reply
     return fb
@@ -406,6 +432,15 @@ def choose_move(body: MoveRequest) -> MoveResponse:
     history = body.history_uci or ""
     skill = int(body.skill_level) if body.skill_level is not None else 10
 
+    inject = os.environ.get("AI_SIDECAR_INJECT_UCI", "").strip()
+    if inject:
+        # Test-only: pretend the model answered with `inject`, then run the same gate.
+        # Runs before the opening book so the demo is deterministic.
+        resp = _clamp_move(inject, body.candidates, "", "", skill, body.fen, source="inject")
+        resp.agent_id = agent_id
+        sess["last_move"] = {"uci": resp.uci, "reason": resp.reason, "fen": body.fen}
+        return resp
+
     book = resolve_book_move(book_lines, history, body.side, opening_name)
     if book is not None:
         resp = MoveResponse(
@@ -414,7 +449,10 @@ def choose_move(body: MoveRequest) -> MoveResponse:
             reply=book["reply"],
             fallback=False,
             agent_id=agent_id,
+            llm_uci=book["uci"],
+            gate="book",
         )
+        _gate_log("book", resp.uci, resp.uci, _candidate_ucis(body.candidates), body.fen, "book line (Godot checks legality)")
         sess["last_move"] = {"uci": resp.uci, "reason": resp.reason, "fen": body.fen}
         return resp
 
@@ -446,7 +484,10 @@ AI side: {body.side}
                         reply="",
                         fallback=False,
                         agent_id=agent_id,
+                        llm_uci=u,
+                        gate="book",
                     )
+                    _gate_log("book", u, u, _candidate_ucis(body.candidates), body.fen, "llm book move (Godot checks legality)")
                     sess["last_move"] = {
                         "uci": resp.uci,
                         "reason": resp.reason,
@@ -490,6 +531,8 @@ candidates JSON:
 
     if _use_mock():
         resp = _pick_fallback(body.candidates, "mock: 난이도 가중 후보 선택", skill)
+        resp.gate = "mock"
+        _gate_log("mock", "", resp.uci, _candidate_ucis(body.candidates), body.fen)
         if opening_name:
             resp.reason = f"{opening_name} 북 수 없음 → Skill {skill} 가중 ({resp.uci})"
         resp.reply = ""
@@ -506,6 +549,7 @@ candidates JSON:
             str(data.get("reason", "")),
             "",  # never auto-chat on moves
             skill,
+            body.fen,
         )
         resp.reply = ""
         resp.agent_id = agent_id
@@ -516,6 +560,8 @@ candidates JSON:
     except Exception as e:
         traceback.print_exc()
         resp = _pick_fallback(body.candidates, f"에이전트 오류 → 폴백 ({e})", skill)
+        resp.gate = "error"
+        _gate_log("error", "", resp.uci, _candidate_ucis(body.candidates), body.fen, type(e).__name__)
         resp.agent_id = agent_id
         sess["last_move"] = {"uci": resp.uci, "reason": resp.reason, "fen": body.fen}
         return resp

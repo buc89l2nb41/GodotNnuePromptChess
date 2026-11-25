@@ -15,6 +15,10 @@ var opening_name: String = ""
 var book_lines: Array = []
 var last_ai_uci: String = ""
 var last_ai_reason: String = ""
+## Candidate-gate result from the last /move: pass | replaced | book | mock | error
+var last_gate: String = ""
+## What the model proposed before the sidecar gate.
+var last_llm_uci: String = ""
 
 var _http: HTTPRequest
 var _pending: int = Kind.NONE
@@ -177,6 +181,8 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 				agent_id = aid
 			last_ai_uci = uci
 			last_ai_reason = reason
+			last_gate = String(data.get("gate", ""))
+			last_llm_uci = String(data.get("llm_uci", ""))
 			move_chosen.emit(uci, reason, reply, fallback)
 		Kind.CHAT:
 			var reply2 := String(data.get("reply", ""))

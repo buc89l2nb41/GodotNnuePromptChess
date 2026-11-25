@@ -1,0 +1,14 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+
+gate demo: inject=e8e1 human=e2e4
+[GATE] SIDECAR  REPLACED proposed=e8e1 applied=e7e6 (후보 밖)
+[GATE] GODOT    PASS     proposed=e7e6 applied=e7e6 candidates=e7e5,e7e6,c7c5,c7c6,b8c6,d7d6,g7g6,a7a6 fen=rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1
+gate demo: saved D:/Cursor/Godot/chess/docs/images/gate_demo_ingame.png (err=0)
+gate demo: fen after AI move = rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2
+gate demo: chat panel text ↓
+
+AI 사이드카 확인 중…
+사이드카를 최신 코드로 재시작…
+사이드카 준비됨
+게이트: AI 제안 e8e1는 엔진 후보가 아니라 e7e6로 교체
+[GATE] REPLACED proposed=e8e1 applied=e7e6 candidates=e7e5,e7e6,c7c5,c7c6,b8c6,d7d6,g7g6,a7a6 fen=rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1 note=inject
