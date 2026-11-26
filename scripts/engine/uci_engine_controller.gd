@@ -118,6 +118,20 @@ func request_candidates_from_fen(fen: String, movetime_ms: int = 200, multipv: i
 		_runner.request_candidates_from_fen(fen, movetime_ms, _skill_level, _max_depth, n)
 
 
+## Full-strength MultiPV (Skill 20, no depth cap) for checks that must not be
+## weakened by the opponent's difficulty: move recommendations, setup verification.
+func request_analysis_from_fen(fen: String, movetime_ms: int = 300, multipv: int = 5) -> void:
+	if not _is_ready:
+		error.emit("engine not ready")
+		return
+	if fen.is_empty():
+		error.emit("fen is empty")
+		return
+	_awaiting_bestmove = true
+	if _runner != null:
+		_runner.request_candidates_from_fen(fen, movetime_ms, 20, 0, clampi(multipv, 1, 10))
+
+
 func set_strength(skill_level: int, max_depth: int) -> void:
 	_skill_level = clampi(skill_level, 0, 20)
 	_max_depth = maxi(0, max_depth)

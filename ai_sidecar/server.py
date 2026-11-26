@@ -34,11 +34,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from openings import (
+    book_next_moves,
     looks_like_opening_request,
+    looks_like_recommend_request,
+    looks_like_setup_request,
+    parse_history,
     normalize_book_lines,
     pick_by_skill,
     resolve_book_move,
 )
+
+import practice
 
 # Load ai_sidecar/.env if present (does not override already-set process env).
 load_dotenv(Path(__file__).resolve().parent / ".env")
@@ -54,7 +60,7 @@ app.add_middleware(
 MOCK = os.environ.get("AI_SIDECAR_MOCK", "").strip() in ("1", "true", "TRUE", "yes")
 MODEL = os.environ.get("CURSOR_AI_MODEL", "composer-2.5").strip() or "composer-2.5"
 # Bump when move/opening logic changes so Godot can restart stale servers.
-CODE_REV = 11
+CODE_REV = 13
 WORKDIR = os.environ.get(
     "AI_SIDECAR_WORKDIR",
     os.path.join(tempfile.gettempdir(), "chess_cursor_ai_sidecar"),
@@ -134,6 +140,21 @@ class ChatRequest(BaseModel):
     style_notes: str = ""
     last_ai_uci: str = ""
     last_reason: str = ""
+    # Stockfish MultiPV for the current position (side to move = the user).
+    # When present, any move the agent recommends must be one of these.
+    candidates: list[Candidate] = Field(default_factory=list)
+    side: str = ""  # side to move: white | black
+
+
+class SetupInfo(BaseModel):
+    """What the agent claims about a position it set up (Godot verifies it)."""
+
+    name: str = ""
+    goal: str = "practice"  # mate | endgame | practice
+    mate_in: int = 0
+    material: str = ""  # e.g. "KBN v K" (white v black)
+    source: str = "agent"  # agent (LLM-made FEN) | catalog (practice_positions.json)
+    catalog_id: str = ""
 
 
 class ChatResponse(BaseModel):
@@ -144,6 +165,11 @@ class ChatResponse(BaseModel):
     # Optional FEN to load onto the Godot board (paste/practice).
     board_fen: Optional[str] = None
     agent_id: str = ""
+    # Gated move recommendation for the user (UCI) and how the gate treated it.
+    recommend_uci: Optional[str] = None
+    recommend_llm_uci: str = ""
+    recommend_gate: str = ""  # pass | replaced | filled | book
+    setup: Optional[SetupInfo] = None
 
 
 class ExplainRequest(BaseModel):
@@ -301,6 +327,82 @@ def _clamp_move(
     if reply:
         fb.reply = reply
     return fb
+
+
+def _gate_recommend(
+    proposed: Any,
+    candidates: list[Candidate],
+    fen: str,
+    asked: bool,
+    book_lines: Any = None,
+    history: str = "",
+) -> tuple[Optional[str], str, str]:
+    """
+    Candidate gate for moves the agent recommends to the user.
+    Returns (uci or None, gate, note). Allowed = MultiPV candidates + next book move.
+    """
+    allowed_list = _candidate_ucis(candidates)
+    if not allowed_list:
+        return None, "", ""
+    book_ok: list[str] = []
+    lines = normalize_book_lines(book_lines)
+    if lines:
+        book_ok = book_next_moves(lines, parse_history(history))
+    u = str(proposed or "").strip().lower()
+    if u in ("none", "null"):
+        u = ""
+    best = allowed_list[0]
+    if u and u in allowed_list:
+        _gate_log("pass", u, u, allowed_list, fen, "recommend")
+        return u, "pass", ""
+    if u and u in book_ok:
+        _gate_log("book", u, u, allowed_list, fen, "recommend book move (Godot checks legality)")
+        return u, "book", ""
+    if u:
+        _gate_log("replaced", u, best, allowed_list, fen, "recommend")
+        return best, "replaced", f"(게이트: 에이전트 추천 {u}는 엔진 후보 밖이라 엔진 1위 {best}로 바꿨습니다)"
+    if asked:
+        _gate_log("filled", "", best, allowed_list, fen, "recommend (agent gave none)")
+        return best, "filled", f"(추천 수는 엔진 1위 {best}입니다)"
+    return None, "", ""
+
+
+def _candidates_prompt(body: "ChatRequest") -> str:
+    if not body.candidates:
+        return ""
+    side = body.side or "(side to move)"
+    rows = [
+        {"rank": c.rank, "uci": c.uci, "score_cp": c.score_cp, "mate": c.mate}
+        for c in body.candidates
+    ]
+    return f"""
+사용자({side}) 차례의 Stockfish 후보 (rank 1이 최선, score_cp는 사용자 기준):
+{json.dumps(rows, ensure_ascii=False)}
+사용자가 수 추천을 원하면 recommend_uci에 위 후보 중 하나(또는 방금 준비한 오프닝 북의 사용자 쪽 다음 수)만 넣으세요.
+reply에서 추천 수를 말할 때도 recommend_uci와 같은 수만 말하세요. 후보에 없는 수는 추천하지 마세요.
+추천을 원하지 않으면 recommend_uci는 null.
+"""
+
+
+def _mentions_mate(message: str) -> bool:
+    m = (message or "").lower()
+    return any(k in m for k in ("메이트", "mate", "엔딩", "endgame", "엔드게임"))
+
+
+def _catalog_response(p: dict[str, Any], agent_id: str) -> "ChatResponse":
+    return ChatResponse(
+        reply=practice.reply_for(p),
+        board_fen=p["fen"],
+        setup=SetupInfo(
+            name=p["name"],
+            goal=p["goal"],
+            mate_in=int(p.get("mate_in", 0)),
+            material=p["material"],
+            source="catalog",
+            catalog_id=p["id"],
+        ),
+        agent_id=agent_id,
+    )
 
 
 def _run_agent_text(agent_id: str, prompt: str) -> str:
@@ -580,6 +682,84 @@ def chat(body: ChatRequest) -> ChatResponse:
     last_uci = (body.last_ai_uci or last.get("uci", "") or "").strip()
     last_reason = (body.last_reason or last.get("reason", "") or "").strip()
 
+    asked_recommend = looks_like_recommend_request(body.message)
+    cand_block = _candidates_prompt(body)
+
+    # Position setup request (mate pattern / endgame drill) → agent proposes a FEN,
+    # Godot verifies it (rules + material + Stockfish) before it touches the board.
+    cat = practice.match(body.message)
+    if cat is not None and (looks_like_setup_request(body.message) or _mentions_mate(body.message)):
+        print(f"[SETUP] catalog id={cat['id']} fen={cat['fen']}", flush=True)
+        return _catalog_response(cat, agent_id)
+
+    if looks_like_setup_request(body.message):
+        if _use_mock():
+            return ChatResponse(
+                reply="포지션 세팅에는 유효한 CURSOR_API_KEY 가 필요합니다.",
+                agent_id=agent_id,
+            )
+        prompt = f"""{COACH_ROLE}
+사용자가 특정 메이트 패턴이나 엔드게임을 연습할 포지션을 보드에 세팅해 달라고 합니다.
+요청을 해석해 연습용 포지션 하나를 표준 6필드 FEN으로 만드세요.
+
+{TERMINOLOGY_RULES}
+
+포지션 규칙 (Godot가 규칙·기물·Stockfish로 검증하고, 틀리면 거부합니다):
+- 백 킹 1개, 흑 킹 1개. 1·8랭크에 폰 없음.
+- 차례가 아닌 쪽 킹은 체크 상태가 아니어야 합니다.
+- 차례(side to move)는 연습하는 쪽(공격하는 쪽)입니다.
+- 메이트 패턴(예: Boden's Mate, Anastasia's Mate, Back-rank Mate, Smothered Mate)이면
+  goal="mate", mate_in=실제 메이트까지 수(1~3). 패턴이 실제로 나오는 위치여야 합니다.
+- 엔드게임 기술(예: 비숍+나이트 메이트 = KBN vs K, 룩 엔딩, 킹+폰)이면 goal="endgame",
+  mate_in=0, 차례인 쪽이 이기는 포지션.
+- material은 "백 기물 v 흑 기물"을 킹 포함 대문자로 (예: "KBN v K", "KR v K", "KQ v KR").
+  FEN의 실제 기물과 정확히 같아야 합니다.
+- 캐슬링 권리는 보통 "-".
+
+검증된 연습 포지션 목록 (요청이 이 중 하나면 FEN을 만들지 말고 catalog_id만 주세요):
+{practice.catalog_prompt()}
+
+현재 보드 FEN(참고): {body.fen or "(없음)"}
+사용자: {body.message}
+
+응답은 오직 JSON 한 개 (목록에 있으면 {{"catalog_id": "rook_mate"}} 만):
+{{
+  "catalog_id": null,
+  "reply": "한국어 짧은 안내 (무슨 포지션인지, 무엇을 연습하는지). 해답 수순은 쓰지 마세요.",
+  "board_fen": "<6필드 FEN>",
+  "setup": {{"name": "Bishop and Knight Mate", "goal": "endgame", "mate_in": 0, "material": "KBN v K"}}
+}}
+"""
+        try:
+            text = _run_agent_text(agent_id, prompt)
+            data = _extract_json_object(text)
+            picked = practice.by_id(str(data.get("catalog_id") or "").strip())
+            if picked is not None:
+                print(f"[SETUP] agent picked catalog id={picked['id']}", flush=True)
+                return _catalog_response(picked, agent_id)
+            fen = str(data.get("board_fen") or "").strip() or None
+            setup_raw = data.get("setup") if isinstance(data.get("setup"), dict) else {}
+            setup = SetupInfo(
+                name=str(setup_raw.get("name", "") or ""),
+                goal=str(setup_raw.get("goal", "practice") or "practice").lower(),
+                mate_in=int(setup_raw.get("mate_in", 0) or 0),
+                material=str(setup_raw.get("material", "") or ""),
+            )
+            print(
+                f"[SETUP] proposed fen={fen} name={setup.name} goal={setup.goal} "
+                f"mate_in={setup.mate_in} material={setup.material}",
+                flush=True,
+            )
+            return ChatResponse(
+                reply=str(data.get("reply", "") or "포지션을 준비했어요."),
+                board_fen=fen,
+                setup=setup if fen else None,
+                agent_id=agent_id,
+            )
+        except Exception as e:
+            traceback.print_exc()
+            return ChatResponse(reply=f"포지션 세팅 오류: {e}", agent_id=agent_id)
+
     # Opening request → ask Cursor to look up / recall main lines as UCI book.
     if looks_like_opening_request(body.message):
         if _use_mock():
@@ -605,10 +785,11 @@ def chat(body: ChatRequest) -> ChatResponse:
 기보 요약(UCI): {body.history_summary or "(없음)"}
 이전 스타일: {style or "(없음)"}
 사용자: {body.message}
-
+{cand_block}
 응답 JSON 스키마:
 {{
   "reply": "한국어 대화 톤. 오프닝 이름은 영어만 (예: Sicilian Defense, Najdorf Variation)",
+  "recommend_uci": null,
   "opening_name": "Sicilian Defense, Najdorf Variation",
   "style_update": "opening:sicilian_najdorf | short English coaching note",
   "book_lines": [
@@ -643,12 +824,22 @@ def chat(body: ChatRequest) -> ChatResponse:
                 reply = f"{reply} (북 {len(book_lines)}줄 로드)"
             elif opening_name:
                 reply = f"{reply} (북 라인을 못 받아 이후 수에서 다시 판단할게요)"
+            llm_rec = str(data.get("recommend_uci") or "").strip().lower()
+            rec, rec_gate, rec_note = _gate_recommend(
+                llm_rec, body.candidates, body.fen, asked_recommend,
+                book_lines or sess.get("book_lines"), body.history_summary,
+            )
+            if rec_note:
+                reply = f"{reply} {rec_note}"
             return ChatResponse(
                 reply=reply,
                 style_update=style_update,
                 opening_name=opening_name,
                 book_lines=book_lines,
                 agent_id=agent_id,
+                recommend_uci=rec,
+                recommend_llm_uci=llm_rec,
+                recommend_gate=rec_gate,
             )
         except Exception as e:
             traceback.print_exc()
@@ -681,6 +872,10 @@ def chat(body: ChatRequest) -> ChatResponse:
 - 직전 수 이유("왜?", "그 수 설명해줘") → last AI 수를 바탕으로 reply에 설명
 - 보드에 올릴 FEN → board_fen
 - 일반 잡담/질문 → reply만, 다른 필드는 null/[]
+- "어떤 메이트를 연습할 수 있어?" 같은 질문 → 아래 연습 포지션 이름을 소개 (사용자가 이름을 말하면 바로 보드에 올라갑니다)
+
+연습 포지션 목록:
+{practice.catalog_prompt()}
 
 수를 보드에 직접 두지 마세요. 합법 UCI book만 제시합니다.
 
@@ -691,10 +886,11 @@ def chat(body: ChatRequest) -> ChatResponse:
 직전 AI 수(UCI): {last_uci or "(없음)"}
 직전 내부 메모: {last_reason or "(없음)"}
 사용자: {body.message}
-
+{cand_block}
 응답은 오직 JSON 한 개:
 {{
   "reply": "한국어 답변 (오프닝명은 영어, 용어는 한국 관용/영어)",
+  "recommend_uci": null,
   "style_update": null,
   "opening_name": null,
   "book_lines": [],
@@ -727,6 +923,13 @@ def chat(body: ChatRequest) -> ChatResponse:
             sess["book_lines"] = book_lines
             reply = f"{reply} (북 {len(book_lines)}줄 로드)"
         board_fen = _optional_board_fen(data, body.message)
+        llm_rec = str(data.get("recommend_uci") or "").strip().lower()
+        rec, rec_gate, rec_note = _gate_recommend(
+            llm_rec, body.candidates, body.fen, asked_recommend,
+            sess.get("book_lines"), body.history_summary,
+        )
+        if rec_note:
+            reply = f"{reply} {rec_note}"
         return ChatResponse(
             reply=reply,
             style_update=style_update,
@@ -734,6 +937,9 @@ def chat(body: ChatRequest) -> ChatResponse:
             book_lines=book_lines,
             board_fen=board_fen,
             agent_id=agent_id,
+            recommend_uci=rec,
+            recommend_llm_uci=llm_rec,
+            recommend_gate=rec_gate,
         )
     except Exception as e:
         traceback.print_exc()

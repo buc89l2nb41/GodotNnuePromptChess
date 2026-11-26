@@ -1,10 +1,50 @@
 candidates (stockfish): ['e2e4', 'd2d4', 'g1f3', 'e2e3', 'c2c3']
-[GATE] REPLACED proposed=e1e8 applied=g1f3 candidates=e2e4,d2d4,g1f3,e2e3,c2c3 fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 note=inject
-PASS illegal move: proposed=e1e8 -> applied=g1f3 gate=replaced reason=inject 제안 'e1e8'는 후보 밖 → 난이도 가중 후보 g1f3로 교체
+[GATE] REPLACED proposed=e1e8 applied=e2e4 candidates=e2e4,d2d4,g1f3,e2e3,c2c3 fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 note=inject
+PASS illegal move: proposed=e1e8 -> applied=e2e4 gate=replaced reason=inject 제안 'e1e8'는 후보 밖 → 난이도 가중 후보 e2e4로 교체
 [GATE] REPLACED proposed=g2g4 applied=e2e4 candidates=e2e4,d2d4,g1f3,e2e3,c2c3 fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 note=inject
 PASS legal but off-candidate: proposed=g2g4 -> applied=e2e4 gate=replaced reason=inject 제안 'g2g4'는 후보 밖 → 난이도 가중 후보 e2e4로 교체
 [GATE] REPLACED proposed=knight to f3 applied=e2e4 candidates=e2e4,d2d4,g1f3,e2e3,c2c3 fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 note=inject
 PASS unparseable answer: proposed=knight to f3 -> applied=e2e4 gate=replaced reason=inject 제안 'knight to f3'는 후보 밖 → 난이도 가중 후보 e2e4로 교체
 [GATE] PASS     proposed=e2e4 applied=e2e4 candidates=e2e4,d2d4,g1f3,e2e3,c2c3 fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 note=inject
 PASS candidate passes: proposed=e2e4 -> applied=e2e4 gate=pass reason=
-gate test: 4/4 passed
+[GATE] PASS     proposed=e2e4 applied=e2e4 candidates=e2e4,d2d4,g1f3,e2e3,c2c3 fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 note=recommend
+PASS recommend candidate passes: proposed=e2e4 -> e2e4 gate=pass 
+[GATE] REPLACED proposed=g2g4 applied=e2e4 candidates=e2e4,d2d4,g1f3,e2e3,c2c3 fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 note=recommend
+PASS recommend off-candidate replaced: proposed=g2g4 -> e2e4 gate=replaced (게이트: 에이전트 추천 g2g4는 엔진 후보 밖이라 엔진 1위 e2e4로 바꿨습니다)
+[GATE] REPLACED proposed=e1e8 applied=e2e4 candidates=e2e4,d2d4,g1f3,e2e3,c2c3 fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 note=recommend
+PASS recommend illegal replaced: proposed=e1e8 -> e2e4 gate=replaced (게이트: 에이전트 추천 e1e8는 엔진 후보 밖이라 엔진 1위 e2e4로 바꿨습니다)
+[GATE] FILLED   proposed=(none) applied=e2e4 candidates=e2e4,d2d4,g1f3,e2e3,c2c3 fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 note=recommend (agent gave none)
+PASS recommend missing but asked -> engine #1: proposed=(none) -> e2e4 gate=filled (추천 수는 엔진 1위 e2e4입니다)
+PASS recommend not asked -> none: proposed=(none) -> None gate= 
+[GATE] BOOK     proposed=b2b3 applied=b2b3 candidates=e2e4,d2d4,g1f3,e2e3,c2c3 fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 note=recommend book move (Godot checks legality)
+PASS recommend next book move allowed: proposed=b2b3 -> b2b3 gate=book 
+PASS catalog queen_mate: goal=endgame best=h1e4 mate 9
+PASS catalog rook_mate: goal=endgame best=a1a5 mate 15
+PASS catalog two_rook_mate: goal=endgame best=h1h5 mate 5
+PASS catalog queen_rook_mate: goal=endgame best=a1a5 mate 5
+PASS catalog queen_bishop_mate: goal=endgame best=f1c4 mate 7
+PASS catalog queen_knight_mate: goal=endgame best=d1d7 mate 7
+PASS catalog two_bishop_mate: goal=endgame best=e1d2 cp 8115
+PASS catalog bishop_knight_mate: goal=endgame best=e1d2 cp 153
+PASS catalog queen_vs_rook: goal=endgame best=h1h8 mate 11
+PASS catalog queen_vs_bishop: goal=endgame best=h1h8 mate 13
+PASS catalog queen_vs_knight: goal=endgame best=h1h8 mate 11
+PASS catalog back_rank_mate: goal=mate best=d1d8 mate 1
+PASS catalog smothered_mate: goal=mate best=g5f7 mate 1
+PASS catalog anastasia_mate: goal=mate best=d3h3 mate 1
+PASS catalog arabian_mate: goal=mate best=b7h7 mate 1
+PASS catalog boden_mate: goal=mate best=e2a6 mate 1
+PASS catalog corner_mate: goal=mate best=e5f7 mate 1
+PASS catalog morphy_mate: goal=mate best=c1b2 mate 1
+PASS catalog opera_mate: goal=mate best=d1d8 mate 1
+PASS catalog damiano_mate: goal=mate best=h1h7 mate 1
+PASS catalog lolli_mate: goal=mate best=h6g7 mate 1
+PASS catalog epaulette_mate: goal=mate best=a2e6 mate 1
+PASS catalog greco_mate: goal=mate best=d1h1 mate 1
+PASS catalog match '비나메이트 연습하고 싶어, 기물 세팅해줘' -> bishop_knight_mate
+PASS catalog match '룩 메이트 해보고 싶어' -> rook_mate
+PASS catalog match '투룩 메이트' -> two_rook_mate
+PASS catalog match '백랭크메이트 연습' -> back_rank_mate
+PASS catalog match '퀸 대 룩 엔딩 연습' -> queen_vs_rook
+PASS catalog match 'Boden's mate please' -> boden_mate
+gate test: 39/39 passed

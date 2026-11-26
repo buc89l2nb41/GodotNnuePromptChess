@@ -19,6 +19,12 @@ var last_ai_reason: String = ""
 var last_gate: String = ""
 ## What the model proposed before the sidecar gate.
 var last_llm_uci: String = ""
+## From the last /chat: gated move recommendation for the user, and its gate result.
+var last_recommend_uci: String = ""
+var last_recommend_llm_uci: String = ""
+var last_recommend_gate: String = ""
+## From the last /chat: what the agent claims about a position it set up.
+var last_setup: Dictionary = {}
 
 var _http: HTTPRequest
 var _pending: int = Kind.NONE
@@ -77,8 +83,21 @@ func request_move(
 	_enqueue("/move", body, Kind.MOVE)
 
 
-func request_chat(fen: String, history_summary: String, message: String) -> void:
+func request_chat(fen: String, history_summary: String, message: String, candidates: Array = [], side: String = "") -> void:
+	var cand_json: Array = []
+	for c in candidates:
+		if typeof(c) != TYPE_DICTIONARY:
+			continue
+		cand_json.append({
+			"rank": int(c.get("rank", 1)),
+			"uci": String(c.get("uci", "")),
+			"score_cp": int(c.get("score_cp", 0)),
+			"mate": int(c.get("mate", 0)),
+			"depth": int(c.get("depth", 0)),
+		})
 	var body := {
+		"candidates": cand_json,
+		"side": side,
 		"fen": fen,
 		"history_summary": history_summary,
 		"message": message,
@@ -195,6 +214,14 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 			var books: Array = []
 			if data.has("book_lines") and typeof(data["book_lines"]) == TYPE_ARRAY:
 				books = data["book_lines"]
+			last_recommend_uci = ""
+			if data.has("recommend_uci") and data["recommend_uci"] != null:
+				last_recommend_uci = String(data["recommend_uci"]).strip_edges()
+			last_recommend_llm_uci = String(data.get("recommend_llm_uci", ""))
+			last_recommend_gate = String(data.get("recommend_gate", ""))
+			last_setup = {}
+			if data.has("setup") and typeof(data["setup"]) == TYPE_DICTIONARY:
+				last_setup = data["setup"]
 			var bfen := ""
 			if data.has("board_fen") and data["board_fen"] != null:
 				bfen = String(data["board_fen"]).strip_edges()

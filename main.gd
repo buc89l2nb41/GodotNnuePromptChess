@@ -18,6 +18,7 @@ const BAR_BG := Color(0.149020, 0.141176, 0.129412) # #262421
 const BAR_SEPARATOR := Color(0, 0, 0, 0.24)
 const BOARD_FRAME := Color(0.270588, 0.254902, 0.231373) # #45413B
 const LAST_MOVE := Color(0.803922, 0.823529, 0.415686, 0.38) # #CDD26A
+const HINT := Color(0.25, 0.55, 0.95, 0.45) # 에이전트 추천 수
 const SELECT := Color(0.505882, 0.713725, 0.298039, 0.48) # #81B64C 오버레이
 const LEGAL_DOT := Color(0.2, 0.22, 0.18, 0.4)
 const LEGAL_RING := Color(0.16, 0.18, 0.13, 0.58)
@@ -123,6 +124,17 @@ var _ai: AiSidecarClient
 var _ai_proc: AiSidecarProcess
 var _ai_pending_candidates: Array = []
 var _ai_pending_bestmove: String = ""
+## Who the next engine candidates are for: "ai" (AI move), "chat" (recommendation), "setup" (verify).
+var _cand_purpose: String = ""
+var _chat_pending_msg: String = ""
+var _chat_pending_fen: String = ""
+## Position-setup gate: agent FEN waiting for the engine check, and one automatic retry.
+var _setup_pending: Dictionary = {}
+var _setup_request_msg: String = ""
+var _setup_retry_left: int = 0
+## Agent move recommendation shown on the board (after both gates).
+var _hint_from: Vector2i = Vector2i(-1, -1)
+var _hint_to: Vector2i = Vector2i(-1, -1)
 var _awaiting_ai_pick: bool = false
 var _ai_sidecar_ready: bool = false
 var _ai_sidecar_starting: bool = false
@@ -132,7 +144,7 @@ const _AI_HEALTH_MAX_TRIES := 20
 ## Must match ai_sidecar/server.py CODE_REV
 const _AI_SIDECAR_CODE_REV := 11
 
-enum TurnMode { HUMAN_TURN, ENGINE_THINKING, ENGINE_MOVE_APPLYING, GAME_OVER }
+enum TurnMode { HUMAN_TURN, ENGINE_THINKING, ENGINE_MOVE_APPLYING, GAME_OVER, CHAT_ANALYZING }
 var _turn_mode: int = TurnMode.HUMAN_TURN
 
 
@@ -892,6 +904,10 @@ func _draw() -> void:
 		draw_rect(_rect_for_square(_last_from), LAST_MOVE)
 	if _last_to.x >= 0:
 		draw_rect(_rect_for_square(_last_to), LAST_MOVE)
+	if _hint_from.x >= 0:
+		draw_rect(_rect_for_square(_hint_from), HINT)
+	if _hint_to.x >= 0:
+		draw_rect(_rect_for_square(_hint_to), HINT)
 
 	if _selected.x >= 0:
 		draw_rect(_rect_for_square(_selected), SELECT)
@@ -1085,6 +1101,7 @@ func _record_uci_from_squares(from: Vector2i, to: Vector2i, promo_piece: int = C
 
 
 func _after_any_move() -> void:
+	_clear_hint()
 	if _state == null:
 		return
 	if _game_over:
@@ -1127,6 +1144,7 @@ func _ai_make_move() -> void:
 		# Sidecar ready 후 _after_any_move 가 다시 호출됨.
 		return
 	if _engine != null and _engine.is_ready():
+		_cand_purpose = "ai"
 		_engine.request_candidates_from_fen(_state.fen(), _difficulty_ms)
 		return
 	# AI 모드에서는 엔진이 필수에 가깝다 — mock 대신 안내 후 중단.
@@ -1136,6 +1154,14 @@ func _ai_make_move() -> void:
 
 
 func _on_engine_candidates(candidates: Array, bestmove: String) -> void:
+	var purpose := _cand_purpose
+	_cand_purpose = ""
+	if purpose == "chat":
+		_on_chat_candidates(candidates)
+		return
+	if purpose == "setup":
+		_on_setup_candidates(candidates)
+		return
 	if _turn_mode != TurnMode.ENGINE_THINKING:
 		return
 	if _opponent_mode != OpponentMode.AI:
@@ -1207,7 +1233,12 @@ func _on_ai_chat_replied(reply: String, style_update: String, opening_name: Stri
 		_ai.book_lines = book_lines
 		_chat_append_system("오프닝 북 %d줄 적용" % book_lines.size())
 	if not board_fen.is_empty():
-		_load_board_from_text(board_fen, false)
+		if _ai != null and not _ai.last_setup.is_empty():
+			_verify_setup(board_fen, _ai.last_setup)
+		else:
+			_load_board_from_text(board_fen, false)
+	elif _ai != null and not _ai.last_recommend_uci.is_empty():
+		_show_recommendation(_ai.last_recommend_uci)
 
 
 func _on_position_apply() -> void:
@@ -1290,6 +1321,8 @@ func _load_board_from_text(text: String, from_position_panel: bool) -> bool:
 	_awaiting_ai_pick = false
 	_ai_pending_candidates = []
 	_ai_pending_bestmove = ""
+	_hint_from = Vector2i(-1, -1)
+	_hint_to = Vector2i(-1, -1)
 	_uci_history = hist
 	_undo_stack.clear()
 	_promo.hide()
@@ -1367,7 +1400,133 @@ func _on_chat_send() -> void:
 		return
 	var fen := _state.fen() if _state != null else ""
 	var hist := " ".join(_uci_history)
+	_setup_request_msg = msg
+	_setup_retry_left = 1
+	_clear_hint()
+	if _can_analyze_for_chat():
+		# Get full-strength engine candidates for the user's side first, so any move
+		# the agent recommends can be gated against them.
+		_chat_pending_msg = msg
+		_chat_pending_fen = fen
+		_cand_purpose = "chat"
+		_turn_mode = TurnMode.CHAT_ANALYZING
+		_engine.request_analysis_from_fen(fen, 300, 5)
+		return
 	_ai.request_chat(fen, hist, msg)
+
+
+func _can_analyze_for_chat() -> bool:
+	if _engine == null or not _engine.is_ready() or _state == null:
+		return false
+	if _game_over or _editor_active or _awaiting_ai_pick:
+		return false
+	if _turn_mode != TurnMode.HUMAN_TURN:
+		return false
+	if _cpu_enabled and _cpu_should_move_now():
+		return false
+	return _state.has_any_legal_move(_state.white_to_move)
+
+
+func _on_chat_candidates(candidates: Array) -> void:
+	_turn_mode = TurnMode.HUMAN_TURN
+	if _ai == null:
+		return
+	var side := "white" if _state.white_to_move else "black"
+	_ai.request_chat(_chat_pending_fen, " ".join(_uci_history), _chat_pending_msg, candidates, side)
+
+
+func _clear_hint() -> void:
+	if _hint_from.x < 0 and _hint_to.x < 0:
+		return
+	_hint_from = Vector2i(-1, -1)
+	_hint_to = Vector2i(-1, -1)
+	queue_redraw()
+
+
+func _show_recommendation(rec: String) -> void:
+	# Gate 2 for recommendations: the sidecar already limited it to engine candidates
+	# (or the next book move); the rules decide whether it is shown on the board.
+	var fen := _state.fen()
+	if not MoveGate.is_legal_uci(_state, rec):
+		print("[GATE] GODOT    REC-ILLEGAL proposed=%s fen=%s" % [rec, fen])
+		_chat_append_system("게이트: 추천 수 %s는 규칙상 둘 수 없어 표시하지 않습니다" % rec)
+		return
+	print("[GATE] GODOT    REC-PASS  proposed=%s gate=%s fen=%s" % [rec, _ai.last_recommend_gate, fen])
+	var parsed := UciMoves.parse_uci_move(rec)
+	_hint_from = parsed.from
+	_hint_to = parsed.to
+	queue_redraw()
+	var tag := "엔진 후보"
+	match _ai.last_recommend_gate:
+		"book":
+			tag = "오프닝 북"
+		"replaced":
+			tag = "에이전트 제안 %s → 엔진 1위로 교체" % _ai.last_recommend_llm_uci
+		"filled":
+			tag = "엔진 1위"
+	_chat_append_system("추천 수: %s (%s, 보드에 파란색 표시)" % [rec, tag])
+
+
+func _verify_setup(fen: String, setup: Dictionary) -> void:
+	var material := String(setup.get("material", ""))
+	var v := MoveGate.validate_setup(fen, material)
+	print("[GATE] SETUP    RULES %s fen=%s claimed=%s actual=%s %s" % [
+		"PASS" if bool(v.ok) else "REJECT", fen, material, v.material, v.error])
+	if not bool(v.ok):
+		_setup_reject(String(v.error), fen)
+		return
+	var goal := String(setup.get("goal", "practice"))
+	var engine_free := _engine != null and _engine.is_ready() and _turn_mode == TurnMode.HUMAN_TURN and not _awaiting_ai_pick
+	if (goal == "mate" or goal == "endgame") and engine_free:
+		_setup_pending = {"fen": fen, "setup": setup}
+		_cand_purpose = "setup"
+		_turn_mode = TurnMode.CHAT_ANALYZING
+		_chat_append_system("포지션 검증 중… (규칙 통과, 엔진 확인)")
+		_engine.request_analysis_from_fen(fen, 1500, 1)
+		return
+	_apply_setup(fen, setup, "규칙 검사만 통과 (엔진 확인 생략)")
+
+
+func _on_setup_candidates(candidates: Array) -> void:
+	_turn_mode = TurnMode.HUMAN_TURN
+	var fen := String(_setup_pending.get("fen", ""))
+	var setup: Dictionary = _setup_pending.get("setup", {})
+	_setup_pending = {}
+	var top: Dictionary = candidates[0] if candidates.size() > 0 else {}
+	var r := MoveGate.check_setup_engine(String(setup.get("goal", "")), int(setup.get("mate_in", 0)), top)
+	print("[GATE] SETUP    ENGINE %s goal=%s mate_in=%d engine=%s fen=%s" % [
+		"PASS" if bool(r.ok) else "REJECT", setup.get("goal", ""), int(setup.get("mate_in", 0)), r.seen, fen])
+	if not bool(r.ok):
+		_setup_reject(String(r.error), fen)
+		return
+	_apply_setup(fen, setup, "엔진 확인: %s" % r.seen)
+
+
+func _setup_reject(why: String, fen: String = "") -> void:
+	_chat_append_system("게이트: 에이전트가 만든 포지션을 보드에 올리지 않았습니다 — %s" % why)
+	if _setup_retry_left > 0 and _ai != null and not _setup_request_msg.is_empty():
+		_setup_retry_left -= 1
+		_chat_append_system("같은 요청으로 한 번 더 만들어 달라고 합니다…")
+		var retry := "%s\n\n[자동 재요청] 방금 만든 FEN '%s'은 검증에 실패했습니다: %s. 같은 요청에 맞게 규칙을 지킨 포지션을 다시 세팅해 주세요." % [
+			_setup_request_msg, fen, why]
+		_ai.request_chat(_state.fen(), " ".join(_uci_history), retry)
+	else:
+		_chat_append_system("포지션 세팅을 포기했습니다. 요청을 바꿔 다시 시도해 주세요.")
+
+
+func _apply_setup(fen: String, setup: Dictionary, note: String) -> void:
+	var stm_white := fen.strip_edges().split(" ", false)[1] == "w"
+	# The user practices the side to move; the opponent (CPU/AI) defends.
+	_player_side_mode = PlayerSide.WHITE if stm_white else PlayerSide.BLACK
+	_player_side.select(_player_side_mode)
+	EngineSettings.save_int("player", "side", _player_side_mode)
+	if not _load_board_from_text(fen, false):
+		return
+	var v := MoveGate.validate_setup(fen)
+	print("[GATE] SETUP    APPLIED name=%s material=%s %s fen=%s" % [setup.get("name", ""), v.material, note, fen])
+	var src := "검증된 카탈로그" if String(setup.get("source", "")) == "catalog" else "에이전트가 만든 포지션"
+	_chat_append_system("게이트 통과: %s (%s, %s, %s). %s 차례입니다." % [
+		String(setup.get("name", "포지션")), src, v.material, note, "백(당신)" if stm_white else "흑(당신)"])
 
 
 func _apply_cpu_move_uci(uci: String) -> void:
@@ -1414,6 +1573,15 @@ func _on_engine_bestmove(uci: String) -> void:
 func _on_engine_error(_msg: String) -> void:
 	# 엔진 실패 시에는 mock으로 계속 진행할 수 있어야 함.
 	_last_engine_error = _msg
+	if _turn_mode == TurnMode.CHAT_ANALYZING:
+		var purpose := _cand_purpose
+		_cand_purpose = ""
+		_turn_mode = TurnMode.HUMAN_TURN
+		if purpose == "chat" and _ai != null:
+			# No candidates → the sidecar cannot gate a recommendation, so it won't make one.
+			_ai.request_chat(_chat_pending_fen, " ".join(_uci_history), _chat_pending_msg)
+		elif purpose == "setup":
+			_setup_reject("엔진 검증 실패: %s" % _msg)
 	_update_engine_status()
 
 

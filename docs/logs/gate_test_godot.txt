@@ -5,7 +5,7 @@ PASS load fen
 [GATE] GODOT    ILLEGAL  proposed=e1e8 applied=e2e4 candidates=e2e4,d2d4,g1f3,e2e3,c2c3 fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
 PASS illegal e1e8 is replaced
 PASS replacement e2e4 is an engine candidate
-[GATE] GODOT    ILLEGAL  proposed=Nf3! applied=g1f3 candidates=e2e4,d2d4,g1f3,e2e3,c2c3 fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+[GATE] GODOT    ILLEGAL  proposed=Nf3! applied=e2e4 candidates=e2e4,d2d4,g1f3,e2e3,c2c3 fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
 PASS unparseable answer is replaced by a candidate
 [GATE] GODOT    PASS     proposed=e2e4 applied=e2e4 candidates=e2e4,d2d4,g1f3,e2e3,c2c3 fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
 PASS candidate e2e4 passes
@@ -20,4 +20,46 @@ PASS unparseable answer is replaced by a candidate
 [GATE] GODOT    PASS     proposed=g1f3 applied=g1f3 candidates=g1f3,b1c3,d2d4,f1e2,a2a3 fen=rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2
 PASS candidate g1f3 passes
 PASS gate does not modify the board
-gate test: 12 passed, 0 failed
+[GATE] SETUP    RULES PASS fen=6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1 claimed=KR v KPPP actual=KR v KPPP 
+PASS back-rank mate setup passes rules
+[GATE] SETUP    RULES PASS fen=8/8/8/4k3/8/8/8/4KBN1 w - - 0 1 claimed=KBN v K actual=KBN v K 
+PASS KBN v K setup passes rules
+[GATE] SETUP    RULES REJECT fen=8/8/8/4k3/8/8/8/4KB2 w - - 0 1 claimed=KBN v K actual=KB v K 기물이 요청과 다릅니다 (주장 KBN v K, 실제 KB v K)
+PASS missing knight is rejected (material)
+[GATE] SETUP    RULES REJECT fen=K6k/8/8/8/8/8/8/K7 w - - 0 1 claimed= actual=KK v K 킹 수가 맞지 않습니다 (백 2, 흑 1)
+PASS two white kings are rejected
+[GATE] SETUP    RULES REJECT fen=4k3/8/8/8/8/8/8/4RK2 w - - 0 1 claimed= actual=KR v K 차례가 아닌 쪽 킹이 이미 체크 상태입니다
+PASS side not to move in check is rejected
+[GATE] SETUP    RULES REJECT fen=P3k3/8/8/8/8/8/8/4K3 w - - 0 1 claimed= actual= 1·8랭크에 폰이 있습니다
+PASS pawn on 8th rank is rejected
+PASS practice catalog loads (23 positions)
+PASS catalog queen_mate passes rules (KQ v K) 
+PASS catalog rook_mate passes rules (KR v K) 
+PASS catalog two_rook_mate passes rules (KRR v K) 
+PASS catalog queen_rook_mate passes rules (KQR v K) 
+PASS catalog queen_bishop_mate passes rules (KQB v K) 
+PASS catalog queen_knight_mate passes rules (KQN v K) 
+PASS catalog two_bishop_mate passes rules (KBB v K) 
+PASS catalog bishop_knight_mate passes rules (KBN v K) 
+PASS catalog queen_vs_rook passes rules (KQ v KR) 
+PASS catalog queen_vs_bishop passes rules (KQ v KB) 
+PASS catalog queen_vs_knight passes rules (KQ v KN) 
+PASS catalog back_rank_mate passes rules (KRPPP v KPPP) 
+PASS catalog smothered_mate passes rules (KN v KRPP) 
+PASS catalog anastasia_mate passes rules (KRN v KP) 
+PASS catalog arabian_mate passes rules (KRN v K) 
+PASS catalog boden_mate passes rules (KBB v KRPP) 
+PASS catalog corner_mate passes rules (KRN v KP) 
+PASS catalog morphy_mate passes rules (KRB v KP) 
+PASS catalog opera_mate passes rules (KRB v KPPP) 
+PASS catalog damiano_mate passes rules (KQP v KRP) 
+PASS catalog lolli_mate passes rules (KQP v KP) 
+PASS catalog epaulette_mate passes rules (KQ v KRR) 
+PASS catalog greco_mate passes rules (KRB v KP) 
+[GATE] SETUP    ENGINE PASS goal=mate mate_in=1 engine=mate in 1 fen=6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1
+PASS engine confirms back-rank mate in 1
+[GATE] SETUP    ENGINE PASS goal=endgame mate_in=0 engine=+1.53 fen=8/8/8/4k3/8/8/8/4KBN1 w - - 0 1
+PASS engine confirms KBN v K is winning
+[GATE] SETUP    ENGINE REJECT goal=mate mate_in=2 engine=+1.53 fen=8/8/8/4k3/8/8/8/4KBN1 w - - 0 1
+PASS KBN v K claimed as mate-in-2 is rejected
+gate test: 45 passed, 0 failed

@@ -129,6 +129,49 @@ def looks_like_opening_request(message: str) -> bool:
     return any(k in msg for k in keys)
 
 
+def looks_like_recommend_request(message: str) -> bool:
+    """User wants a move suggestion for their own side."""
+    msg = (message or "").strip().lower()
+    keys = (
+        "추천",
+        "뭐 둘",
+        "뭘 둘",
+        "뭐 두",
+        "뭘 두",
+        "어떤 수",
+        "무슨 수",
+        "다음 수",
+        "힌트",
+        "hint",
+        "best move",
+        "recommend",
+        "suggest",
+    )
+    return any(k in msg for k in keys)
+
+
+def looks_like_setup_request(message: str) -> bool:
+    """User wants a practice position (mate pattern / endgame) placed on the board."""
+    msg = (message or "").strip().lower()
+    if not msg:
+        return False
+    patterns = ("메이트", "mate", "엔드게임", "endgame", "엔딩", "퍼즐", "puzzle", "기물")
+    actions = (
+        "세팅",
+        "셋팅",
+        "배치",
+        "연습",
+        "올려",
+        "만들",
+        "깔아",
+        "set up",
+        "setup",
+        "practice",
+        "drill",
+    )
+    return any(p in msg for p in patterns) and any(a in msg for a in actions)
+
+
 def candidate_list(candidates: list[Any]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for i, c in enumerate(candidates):

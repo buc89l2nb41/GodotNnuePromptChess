@@ -479,7 +479,7 @@ theme_override_styles/pressed = SubResource("StyleBoxFlat_reset_pressed")
 text = "전송"
 
 [node name="AiHttp" type="HTTPRequest" parent="."]
-timeout = 90.0
+timeout = 180.0
 
 [node name="AiHealthHttp" type="HTTPRequest" parent="."]
 timeout = 3.0
